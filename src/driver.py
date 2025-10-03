@@ -10,22 +10,29 @@ import serial
 from threading import Timer
 import pyudev
 
-
 from loco_lib_uart import velocity_control_loco, start_devs, change_color, get_loco_motor_info, dev_list, im
 from arm_lib_can import set_velocity_loop, start_bus, bus, set_current_brake, motor_situations, can_recive
+
+motor_infos = {
+    "DOF1": [12, 1/3],
+    "DOF2": [16, -1],
+    "DOF3": [13, 1],
+    "DOF4": [14, -1/6]
+}
+
 
 def scictl(c):
     return c
 
-#try:
+
+# try:
 #    from RGBGPIO2 import *
-#except:
+# except:
 #    pass
 
 # Configuration
-WS_PORT = 8765          # WebSocket server port
+WS_PORT = 8765  # WebSocket server port
 LSU_PORT = os.getenv("LSU_PORT", "/dev/ttyACM0")
-
 
 # Track active connections
 active_connections = set()
@@ -35,29 +42,25 @@ armSpeed = 10
 # Limit switch
 latestArmCrash = 0
 limitSwitchIgnoreInterval = 20
-bus= 0
+bus = 0
 
-armAvaliable = True # KOLU BUNLA AÇ
+armAvaliable = True  # KOLU BUNLA AÇ
 
 if armAvaliable:
-    start_bus() # KOL
+    start_bus()  # KOL
     import dynamixellib
 
 from loco_lib_uart import science_sensor_serial
 
-
-
-start_devs() # LOCO
+start_devs()  # LOCO
 try:
-    lsu_ser=serial.Serial(LSU_PORT, 115200, timeout=0.1)
-    limitswitch=True
+    lsu_ser = serial.Serial(LSU_PORT, 115200, timeout=0.1)
+    limitswitch = True
 except:
-    limitswitch=False
+    limitswitch = False
 
 dynamixelChanged = False
-dynamixelUSB = "/dev/ttyUSB0" # wll choose automatically after
-
-
+dynamixelUSB = "/dev/ttyUSB0"  # wll choose automatically after
 
 context = pyudev.Context()
 # deviceFilterStrings = ["HUB", "Hub", "Linux"]
@@ -79,6 +82,82 @@ for device in context.list_devices(subsystem='tty'):
 
 
 # Handle WebSocket connections - updated to make path parameter optional
+
+def handle_dofs(DOFs, value, command):
+    if command[4:] == "":
+        print("Yön gelmedi.")
+        return None
+
+    command_head = command[0:4]
+
+    command_tail = command[4:]
+    if command_tail == "Left":
+        command_tail = "Up"
+    elif command_tail == "Right":
+        command_tail = "Down"
+
+    motor_id = motor_infos.get(command_head)[0]
+
+    DOF_index = list(motor_infos.keys()).index(command_head)
+    DOFs[DOF_index] = True
+
+    coef = motor_infos.get(command_head)[1]
+
+    if command_tail == "Down":
+        coef *= -1
+
+    set_velocity_loop(motor_id, coef * armSpeed * value, 200)
+
+
+def handle_effector(value, command):
+    if len(command) == 14:
+        dynamixellib.set_speed(int(-30 * value))
+    else:
+        dynamixellib.set_speed(int(30 * value))
+
+
+def handle_gripper(command):
+    if len(command) == 11:
+        science_sensor_serial.write(b'o\n')
+    else:
+        science_sensor_serial.write(b'l\n')
+
+
+def handle_panTilt(command):
+    command_tail = command[7:]
+
+    to_byte = bytes(command_tail.upper()+'\n')
+    science_sensor_serial.write(to_byte)
+
+
+def handle_led(value):
+    change_color(b'x\n')
+    timer1 = None
+    timer2 = None
+
+    # change_color(["red","blue","green"][int(value)%3])
+    if value == 1:
+        timer1 = Timer(0.5, change_color, ["red"])
+    elif value == 2:
+        timer1 = Timer(0.5, change_color, ["green"])
+    elif value == 3:
+        timer1 = Timer(0.5, change_color, ["blue"])
+    elif value == 4:
+        timer1 = Timer(0.5, change_color, ["red"]);
+        timer2 = Timer(1.0, change_color, ["green"])
+    elif value == 5:
+        timer1 = Timer(0.5, change_color, ["red"]);
+        timer2 = Timer(1.0, change_color, ["blue"])
+    elif value == 6:
+        timer1 = Timer(0.5, change_color, ["green"]);
+        timer2 = Timer(1.0, change_color, ["blue"])
+
+    if timer1:
+        timer1.start()
+    if timer2:
+        timer2.start()
+
+
 async def handle_websocket(websocket, path=None):
     global dynamixelChanged
     client_address = websocket.remote_address
@@ -91,17 +170,18 @@ async def handle_websocket(websocket, path=None):
         change_color(b'x\n')
         change_color('red')
         async for message in websocket:
-            #print(message)
+            # print(message)
             try:
                 data = json.loads(message)
-                if len(data["commands"]) > 0: print(data)
+                if len(data["commands"]) > 0:
+                    print(data)
                 # print(data)
                 # commands = data["commands"]
 
                 locoLinear = 0
                 locoAngular = 0
                 dynamixel = False
-                DOFs = [False, False, False, False] # DOF1, DOF2, DOF3, DOF4
+                DOFs = [False, False, False, False]  # DOF1, DOF2, DOF3, DOF4
                 mp = ""
 
                 for i in data["commands"]:
@@ -109,7 +189,8 @@ async def handle_websocket(websocket, path=None):
                     command = li[0]
                     value = float(li[1])
                     parameter = ""
-                    if len(li) > 2: parameter = li[2]
+                    if len(li) > 2:
+                        parameter = li[2]
 
                     if command == "LocoLinear":
                         locoLinear = value
@@ -118,61 +199,18 @@ async def handle_websocket(websocket, path=None):
                         locoAngular = value
                         mp = parameter
 
-                    elif command == "DOF1Left":
-                        set_velocity_loop(12, armSpeed/3 * value, 200)
-                        DOFs[0] = True
-                    elif command == "DOF1Right":
-                        set_velocity_loop(12, -armSpeed/3 * value, 200)
-                        DOFs[0] = True
-                    elif command == "DOF1":
-                        set_velocity_loop(12, armSpeed/3 * value, 200)
-                        DOFs[0] = True
+                    if command[0:3] == "DOF":
+                        handle_dofs(DOFs, value, command)
 
-                    elif command == "DOF2Up":
-                        set_velocity_loop(16, -armSpeed * value, 200)
-                        DOFs[1] = True
-                    elif command == "DOF2Down":
-                        set_velocity_loop(16, armSpeed * value, 200)
-                        DOFs[1] = True
-                    elif command == "DOF2":
-                        set_velocity_loop(16, -armSpeed * value, 200)
-                        DOFs[1] = True
-
-                    elif command == "DOF3Up":
-                        set_velocity_loop(13, armSpeed * value, 200)
-                        DOFs[2] = True
-                    elif command == "DOF3Down":
-                        set_velocity_loop(13, -armSpeed * value, 200)
-                        DOFs[2] = True
-
-                    elif command == "DOF4Up":
-                        set_velocity_loop(14, -armSpeed/6 * value, 200)
-                        DOFs[3] = True
-                    elif command == "DOF4Down":
-                        set_velocity_loop(14, armSpeed/6 * value, 200)
-                        DOFs[3] = True
-
-                    elif command == "EndEffectorCCW":
-                        dynamixellib.set_speed(int(-30 * value))
+                    elif command[0:3] == "End":
                         dynamixel = True
-                    elif command == "EndEffectorCW":
-                        dynamixellib.set_speed(int(30 * value))
-                        dynamixel = True
+                        handle_effector(value, command)
 
-                    elif command == "GripperOpen":
-                        science_sensor_serial.write(b'o\n')
-                    elif command == "GripperClose":
-                        science_sensor_serial.write(b'l\n')
+                    elif command[0:3] == "Gri":
+                        handle_gripper(command)
 
-
-                    elif command == "PanTiltUp":
-                        science_sensor_serial.write(b'UP\n')
-                    elif command == "PanTiltDown":
-                        science_sensor_serial.write(b'DOWN\n')
-                    elif command == "PanTiltLeft": 
-                        science_sensor_serial.write(b'LEFT\n')
-                    elif command == "PanTiltRight":
-                        science_sensor_serial.write(b'RIGHT\n')
+                    elif command[0:3] == "Pan":
+                        handle_panTilt(command)
 
                     # elif command == "ScienceUp":
                     #     science_dc_ctl('SCIENCEUP')
@@ -184,34 +222,22 @@ async def handle_websocket(websocket, path=None):
                     #     science_dc_ctl('DRILLSTART')
                     # elif command == "DrillStop":
                     #     science_dc_ctl('DRILLSTOP')
-                    
+
                     elif command == "Led":
-                        change_color(b'x\n')
-                        timer1 = None
-                        timer2 = None
-                        print("LED KOMUTU BU:", command, value)
-                        # change_color(["red","blue","green"][int(value)%3])
-                        if value == 1: timer1 = Timer(0.5, change_color, ["red"])
-                        elif value == 2: timer1 = Timer(0.5, change_color, ["green"])
-                        elif value == 3: timer1 = Timer(0.5, change_color, ["blue"])
-                        elif value == 4: timer1 = Timer(0.5, change_color, ["red"]); timer2 = Timer(1.0, change_color, ["green"])
-                        elif value == 5: timer1 = Timer(0.5, change_color, ["red"]); timer2 = Timer(1.0, change_color, ["blue"])
-                        elif value == 6: timer1 = Timer(0.5, change_color, ["green"]); timer2 = Timer(1.0, change_color, ["blue"])
+                        handle_led(value)
 
-                        if(timer1): timer1.start()
-                        if(timer2): timer2.start()
-
-                velocity_control_loco(locoAngular/4, locoLinear/2, mp)
+                velocity_control_loco(locoAngular / 4, locoLinear / 2, mp)
 
                 # Hold dof position if no command
-                if not DOFs[0] and armAvaliable:
-                    set_velocity_loop(12, 0, 200)
-                if not DOFs[1] and armAvaliable:
-                    set_velocity_loop(16, 0, 200)
-                if not DOFs[2] and armAvaliable:
-                    set_velocity_loop(13, 0, 200)
-                if not DOFs[3] and armAvaliable:
-                    set_velocity_loop(14, 0, 200)
+                if armAvaliable:
+                    if not DOFs[0]:
+                        set_velocity_loop(12, 0, 200)
+                    if not DOFs[1]:
+                        set_velocity_loop(16, 0, 200)
+                    if not DOFs[2]:
+                        set_velocity_loop(13, 0, 200)
+                    if not DOFs[3]:
+                        set_velocity_loop(14, 0, 200)
 
                 # Stop dynamixel if no command
                 if not dynamixelChanged and dynamixel:
@@ -222,7 +248,7 @@ async def handle_websocket(websocket, path=None):
 
                 # Timestamp
                 timestamp = int(time.time() * 1000)
-                #print(limitswitch, lsu_ser)
+                # print(limitswitch, lsu_ser)
                 if armAvaliable:
                     can_recive()
 
@@ -236,10 +262,12 @@ async def handle_websocket(websocket, path=None):
                     "arm": motor_situations,
                     "crash": limiswitchres
                 }
-                await websocket.send(json.dumps({"status": "still_connected", "message": message, "timestamp": timestamp}))
+                await websocket.send(
+                    json.dumps({"status": "still_connected", "message": message, "timestamp": timestamp}))
                 # print(message)
             except json.JSONDecodeError:
-                print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Invalid JSON received: {message}")
+                print(
+                    f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Invalid JSON received: {message}")
                 await websocket.send(json.dumps({"status": "error", "message": "Invalid JSON format"}))
 
             except Exception as e:
@@ -254,12 +282,13 @@ async def handle_websocket(websocket, path=None):
         active_connections.remove(websocket)
         print(f"Connection from {client_address} closed, {len(active_connections)} active connections")
 
+
 def CheckLimitSwitch():
     global limitSwitchIgnoreInterval, latestArmCrash
     line = lsu_ser.readline()
     arduinoMessage = line.decode(errors="ignore")
     currentTime = int(time.time() * 1000)
-    #print(line)
+    # print(line)
     if arduinoMessage == "1\r\n":
         if currentTime > limitSwitchIgnoreInterval + latestArmCrash:
             print("CRASH")
@@ -299,13 +328,16 @@ def ParseLocoMotorInfo(loco_list):
         result.append(parsed)
     return result
 
+
 # Graceful shutdown
 async def shutdown():
     print("Shutting down server...")
 
     if active_connections:
         print(f"Closing {len(active_connections)} active connections...")
-        await asyncio.gather(*(conn.close(1001, "Server shutdown") for conn in active_connections), return_exceptions=True)
+        await asyncio.gather(*(conn.close(1001, "Server shutdown") for conn in active_connections),
+                             return_exceptions=True)
+
 
 # Main function
 async def main():
@@ -323,6 +355,7 @@ async def main():
     finally:
         server.close()
         await server.wait_closed()
+
 
 if __name__ == "__main__":
     try:

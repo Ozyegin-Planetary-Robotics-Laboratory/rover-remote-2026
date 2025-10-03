@@ -1,0 +1,87 @@
+# class Arm:
+#     def __init__(self, pos, angles):
+#         self.chain = Chain(name='4dof_arm', links=[
+#                             OriginLink(),
+#                             URDFLink(
+#                                 name="base",
+#                                 origin_translation=np.array([0, 0, 0]),
+#                                 origin_orientation=np.array([0, 0, 0]),
+#                                 rotation=np.array([0, 1, 0]),  # Rotates around y-axis (xz plane)
+#                                 bounds=(-np.pi, np.pi)
+#                             ),
+#                             URDFLink(
+#                                 name="shoulder",
+#                                 origin_translation=np.array([0, 0.48065, 0]),  # 0.3 meters up
+#                                 origin_orientation=np.array([0, 0, 0]),
+#                                 rotation=np.array([0, 0, 1]),  # Rotates around z-axis (xy plane)
+#                                 bounds=(-np.pi, np.pi)
+#                             ),
+#                             URDFLink(
+#                                 name="elbow",
+#                                 origin_translation=np.array([0, 0.42053, 0]),  # 0.25 meters up
+#                                 origin_orientation=np.array([0, 0, 0]),
+#                                 rotation=np.array([0, 0, 1]),  # Rotates around z-axis (xy plane)
+#                                 bounds=(-np.pi, np.pi)
+#                             ),
+#                             URDFLink(
+#                                 name="wrist",
+#                                 origin_translation=np.array([0, 0.40736, 0]),  # 0.32 meters up
+#                                 origin_orientation=np.array([0, 0, 0]),
+#                                 rotation=np.array([0, 0, 1]),  # Rotates around z-axis (xy plane)
+#                                 bounds=(-np.pi, np.pi)
+#                             )
+#                         ])
+
+#         self.pos=pos
+#         self.x=pos[0]
+#         self.y=pos[1]
+#         self.z=pos[2]
+
+#         self.base_angle = angles[0]
+#         self.s_angle = angles[1]
+#         self.e_angle = angles[2]
+#         self.w_angle = angles[3]
+
+#     def apply_angles(self, motor_dict, angle_sequence):
+#         print(angle_sequence)
+#         for angles in angle_sequence:
+
+#             self.base_angle = angles[0]
+
+#             self.s_angle = angles[1]
+
+#             self.e_angle = angles[2]
+
+#             self.w_angle = angles[3]
+#             print(str(angles)[1:-1])
+
+#     def move(self, desired_movement):
+#         desired_pos = []
+#         for i in range(len(self.pos)):
+#             desired_pos.append(self.pos[i] + desired_movement[i])
+
+#         sequence = follow_line(self.pos, desired_pos, num_points=10)
+#         self.apply_angles(None, sequence)
+#         self.pos = get_end_effector_position([self.base_angle, self.s_angle, self.e_angle, self.w_angle])
+
+if __name__=="__main__":
+    # joysticks = []
+    # #clock = pygame.time.Clock()
+
+    # for i in range(0, pygame.joystick.get_count()):
+    #     joysticks.append(pygame.joystick.Joystick(i))
+    #     joysticks[-1].init()
+    #     print ("Detected joystick "),joysticks[-1].get_name(),"'"
+
+    #AresArm = Arm([0.2, 0.5, 0.1], [0,0,0,0])
+    # while 1:
+    #     movement = input().split(",")
+    #     for i in range(len(movement)):
+    #         movement[i] = float(movement[i])
+    #     AresArm.move(movement)
+    #     print(AresArm.pos)
+    #id=13
+    start_bus()
+    for _ in range(20):
+        set_velocity_loop(id, 25, 200)
+    stop_bus()
