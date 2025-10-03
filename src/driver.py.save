@@ -1,0 +1,350 @@
+#!/usr/bin/env python3
+import asyncio
+import websockets
+import json
+import socket
+import signal
+import os
+import time
+import serial
+import dynamixellib
+from threading import Timer
+import pyudev
+
+
+from loco_lib_uart import velocity_control_loco, start_devs, change_color, scictl, get_loco_motor_info, dev_list
+from arm_lib_can import set_velocity_loop, start_bus, start_bus, set_current_brake, motor_situations, can_recive
+
+
+#try:
+#    from RGBGPIO2 import *
+#except:
+#    pass
+
+# Configuration
+#UDP_IP = "192.168.1.3"  # Rover's IP address
+#UDP_PORT = 12344        # Rover's UDP port
+WS_PORT = 8765          # WebSocket server port
+
+# Create UDP socket
+#udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+# Track active connections
+active_connections = set()
+
+armSpeed = 10
+
+start_bus()
+start_devs()
+
+dynamixelChanged = False
+dynamixelUSB = "/dev/ttyUSB3" # wll choose automatically after
+
+context = pyudev.Context()
+# deviceFilterStrings = ["HUB", "Hub", "Linux"]
+
+for device in context.list_devices(subsystem='tty'):
+    path = device.get('ID_PATH')
+    serial = device.get('ID_SERIAL')
+    if path and serial:
+        # dynamixel
+        if "AD01UZ2Y" in serial:
+            dynamixelUSB = device.device_node
+            print("dynamixel: " + device.device_node)
+        # nano
+        elif "1a86_USB_Serial" in serial:
+            print("nano: " + device.device_node)
+
+        # print(f"{device.device_node} - {serial} - {path}")
+
+
+# Handle WebSocket connections - updated to make path parameter optional
+async def handle_websocket(websocket, path=None):
+    global dynamixelChanged
+    client_address = websocket.remote_address
+    print(f"New connection from {client_address}")
+
+    active_connections.add(websocket)
+
+    try:
+        await websocket.send(json.dumps({"status": "connected", "message": "Connected to bridge"}))
+        change_color(b'x')
+        change_color(b'g')
+        async for message in websocket:
+            #print(message)
+            try:
+                data = json.loads(message)
+                if len(data["commands"]) > 0: print(data)
+                # print(data)
+                # commands = data["commands"]
+
+                locoLinear = 0
+                locoAngular = 0
+                dynamixel = False
+                DOFs = [False, False, False, False] # DOF1, DOF2, DOF3, DOF4 
+                mp = ""
+
+                for i in data["commands"]:
+                    li = i.split("#")
+                    command = li[0]
+                    value = float(li[1])
+                    parameter = ""
+                    if len(li) > 2: parameter = li[2]
+
+                    if command == "LocoLinear":
+                        locoLinear = value
+                        mp = parameter
+                    elif command == "LocoAngular":
+                        locoAngular = value
+                        mp = parameter
+                    
+                    #Science
+                    elif command == "ScienceUp":
+                        scictl(b"k")
+                    elif command == "ScienceDown":
+                        scictl(b"i")
+                    
+                    elif command == "DOF1Left":
+                        set_velocity_loop(12, armSpeed/3 * value, 200)
+                        DOFs[0] = True
+                    elif command == "DOF1Right":
+                        set_velocity_loop(12, -armSpeed/3 * value, 200)
+                        DOFs[0] = True
+                    elif command == "DOF1":
+                        set_velocity_loop(12, armSpeed/3 * value, 200)
+                        DOFs[0] = True
+                    
+                    elif command == "DOF2Up":
+                        set_velocity_loop(16, -armSpeed * value, 200)
+                        DOFs[1] = True
+                    elif command == "DOF2Down":
+                        set_velocity_loop(16, armSpeed * value, 200)
+                        DOFs[1] = True
+                    elif command == "DOF2":
+                        set_velocity_loop(16, -armSpeed * value, 200)
+                        DOFs[1] = True
+                    
+                    elif command == "DOF3Up":
+                        set_velocity_loop(13, armSpeed * value, 200)
+                        DOFs[2] = True
+                    elif command == "DOF3Down":
+                        set_velocity_loop(13, -armSpeed * value, 200)
+                        DOFs[2] = True
+                    
+                    elif command == "DOF4Up":
+                        set_velocity_loop(14, -armSpeed/6 * value, 200)
+                        DOFs[3] = True
+                    elif command == "DOF4Down":
+                        set_velocity_loop(14, armSpeed/6 * value, 200)
+                        DOFs[3] = True
+                    
+                    elif command == "EndEffectorCCW":
+                        DynamixelControl(int(30 * value), "CW") # Reverse direction due to gear
+                        dynamixel = True
+                    elif command == "EndEffectorCW":
+                        DynamixelControl(int(30 * value), "CCW") # Reverse direction due to gear
+                        dynamixel = True
+                    
+                    elif command == "GripperOpen":
+                        scictl(b'o\n')
+                    elif command == "GripperClose":
+                        scictl(b'l\n')
+
+                    elif command == "PanTiltUp":
+                        # (b'UP\n')
+                        pass
+                    elif command == "PanTiltDown":
+                        # (b'DOWN\n')
+                        pass
+                    elif command == "PanTiltLeft":
+                        # (b'LEFT\n')
+                        pass
+                    elif command == "PanTiltRight":
+                        # (b'RIGHT\n')
+                        pass
+
+                    elif command == "Led":
+                        change_color(b'x')
+                        timer1 = None
+                        timer2 = None
+                        # change_color(["red","blue","green"][int(value)%3])
+                        if value == 1: timer1 = Timer(0.5, change_color, ["red"])
+                        elif value == 2: timer1 = Timer(0.5, change_color, ["green"])
+                        elif value == 3: timer1 = Timer(0.5, change_color, ["blue"])
+                        elif value == 4: timer1 = Timer(0.5, change_color, ["red"]); timer2 = Timer(1.0, change_color, ["green"])
+                        elif value == 5: timer1 = Timer(0.5, change_color, ["red"]); timer2 = Timer(1.0, change_color, ["blue"])
+                        elif value == 6: timer1 = Timer(0.5, change_color, ["green"]); timer2 = Timer(1.0, change_color, ["blue"])
+                        
+                        if(timer1): timer1.start()
+                        if(timer2): timer2.start()
+
+                # Constants for MX-64 (Protocol 1.0)
+ADDR_TORQUE_ENABLE      = 24
+ADDR_GOAL_POSITION      = 30
+ADDR_PRESENT_POSITION   = 36
+ADDR_CW_ANGLE_LIMIT     = 6
+ADDR_CCW_ANGLE_LIMIT    = 8
+
+PROTOCOL_VERSION        = 1.0
+DXL_ID                  = 1
+BAUDRATE                = 57600
+DEVICENAME              = '/dev/ttyUSB0'
+
+TORQUE_ENABLE           = 1
+TORQUE_DISABLE          = 0
+DXL_RESOLUTION          = 4096  # 0–4095 corresponds to 0–360°
+
+def move_to_degree(degree):
+    if not (0 <= degree <= 360):
+        raise ValueError("Degree must be between 0 and 360")
+
+    position = int((degree / 360.0) * (DXL_RESOLUTION - 1))
+
+    # Initialize port and packet handlers
+    portHandler = PortHandler(DEVICENAME)
+    packetHandler = PacketHandler(PROTOCOL_VERSION)
+
+    if not portHandler.openPort():
+        raise IOError("Failed to open port")
+
+    if not portHandler.setBaudRate(BAUDRATE):
+        raise IOError("Failed to set baudrate")
+
+    # Disable torque to allow EEPROM write
+    packetHandler.write1ByteTxRx(portHandler, DXL_ID, ADDR_TORQUE_ENABLE, TORQUE_DISABLE)
+
+    # Ensure Joint Mode
+    packetHandler.write2ByteTxRx(portHandler, DXL_ID, ADDR_CW_ANGLE_LIMIT, 0)
+    packetHandler.write2ByteTxRx(portHandler, DXL_ID, ADDR_CCW_ANGLE_LIMIT, 4095)
+
+    # Enable torque
+    dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(
+        portHandler, DXL_ID, ADDR_TORQUE_ENABLE, TORQUE_ENABLE)
+    if dxl_comm_result != COMM_SUCCESS:
+        raise RuntimeError(f"Torque enable failed: {packetHandler.getTxRxResult(dxl_comm_result)}")
+
+    # Send goal position
+    dxl_comm_result, dxl_error = packetHandler.write2ByteTxRx(
+        portHandler, DXL_ID, ADDR_GOAL_POSITION, position)
+    if dxl_comm_result != COMM_SUCCESS:
+        raise RuntimeError(f"Failed to send goal position: {packetHandler.getTxRxResult(dxl_comm_result)}")
+
+    print(f"✅ Moving to {degree}° ({position})")
+
+    # Wait until movement is complete
+    while True:
+        dxl_present_position, dxl_comm_result, dxl_error = packetHandler.read2ByteTxRx(
+            portHandler, DXL_ID, ADDR_PRESENT_POSITION)
+        if dxl_comm_result != COMM_SUCCESS:
+            print(f"[TxRxResult] {packetHandler.getTxRxResult(dxl_comm_result)}")
+            break
+
+        if abs(dxl_present_position - position) < 10:
+            break
+
+    print("✅ Movement complete.")
+    portHandler.closePort()
+
+                velocity_control_loco(locoAngular/4, locoLinear/2, mp)
+
+                # Hold dof position if no command
+                if not DOFs[0]:
+                    set_velocity_loop(12, 0, 200)
+                if not DOFs[1]:
+                    set_velocity_loop(16, 0, 200)
+                if not DOFs[2]:
+                    set_velocity_loop(13, 0, 200)
+                if not DOFs[3]:
+                    set_velocity_loop(14, 0, 200)
+
+                # Stop dynamixel if no command
+                if not dynamixelChanged and dynamixel:
+                    dynamixelChanged = True
+                elif dynamixelChanged and not dynamixel:
+                    dynamixelChanged = False
+                    DynamixelControl(0, "CW")
+
+                # Timestamp
+                timestamp = int(time.time() * 1000)
+                can_recive()
+
+                parsedLocoMotorInfo = ParseLocoMotorInfo(get_loco_motor_info())
+                message = {
+                    "loco": parsedLocoMotorInfo,
+                    "arm": motor_situations,
+                }
+                await websocket.send(json.dumps({"status": "still_connected", "message": message, "timestamp": timestamp}))
+                # print(message)
+            except json.JSONDecodeError:
+                print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Invalid JSON received: {message}")
+                await websocket.send(json.dumps({"status": "error", "message": "Invalid JSON format"}))
+
+            except Exception as e:
+                print(f"Error processing message: {e}")
+                os.system("resetcan1.sh")
+
+                await websocket.send(json.dumps({"status": "error", "message": str(e)}))
+
+    except websockets.exceptions.ConnectionClosed as e:
+        print(f"Connection closed from {client_address}: {e.code} - {e.reason}")
+    finally:
+        active_connections.remove(websocket)
+        print(f"Connection from {client_address} closed, {len(active_connections)} active connections")
+
+
+# speed: int, direction: "CW" or "CCW"
+def DynamixelControl(speed, direction):
+    dynamixellib.set_dynamixel_speed(dynamixelUSB, 57600, speed, direction)
+
+def ParseLocoMotorInfo(loco_list):
+    result = []
+    for info in loco_list:
+        datas = info.split("|")
+        parsed = {}
+
+        # First part (Motor + Port)
+        first = datas[0].split(" ", 1)
+        parsed["Motor"] = first[0]
+        if len(first) > 1 and ":" in first[1]:
+            k, v = first[1].split(":", 1)
+            parsed[k.strip()] = v.strip()
+
+        # Remaining parts
+        for d in datas[1:]:
+            if ":" in d:
+                k, v = d.split(":", 1)
+                parsed[k.strip()] = v.strip()
+
+        result.append(parsed)
+    return result
+
+# Graceful shutdown
+async def shutdown():
+    print("Shutting down server...")
+
+    if active_connections:
+        print(f"Closing {len(active_connections)} active connections...")
+        await asyncio.gather(*(conn.close(1001, "Server shutdown") for conn in active_connections), return_exceptions=True)
+
+# Main function
+async def main():
+    print(f"Web to Motor Bridge")
+    print(f"WebSocket server starting on port {WS_PORT}")
+
+    # Create the server
+    server = await websockets.serve(handle_websocket, "0.0.0.0", WS_PORT)
+    print("Server started successfully. Press Ctrl+C to stop.")
+
+    try:
+        await asyncio.Future()  # Keep running forever
+    except asyncio.CancelledError:
+        await shutdown()
+    finally:
+        server.close()
+        await server.wait_closed()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nServer shutting down...")

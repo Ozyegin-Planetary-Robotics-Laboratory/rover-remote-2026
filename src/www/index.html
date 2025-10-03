@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ÖzÜ Rover Remote</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div id="TopBar">
+    <div class="TopBarDivClass">
+      <button onclick="AddWindow()" style="background-color: var(--color2);" class="ButtonClass">Add Window</button>
+    </div>
+    <div class="TopBarDivClass">
+      <span>ÖzÜ Rover Remote</span>
+    </div>
+    <div class="TopBarDivClass">
+      <span id="LatencySpan">-</span>
+      &nbsp&nbsp
+      <span id="ConnectionStatus"></span>
+       
+    </div>
+
+  </div>
+  <div id="WindowsDiv">
+    
+  </div>
+
+  <script type="text/javascript" src="jsmpeg.min.js"></script>
+  <script src="script.js"></script>
+</body>
+
+</html>

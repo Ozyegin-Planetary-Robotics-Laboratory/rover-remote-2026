@@ -1,0 +1,4 @@
+websockets
+python-can
+python-can[serial]
+pyserial

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Linux webcam server</title>
+  <style type="text/css">
+    html, body {
+      background-color: #111;
+      color: white;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: row; /* <-- HORIZONTAL layout */
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .video-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .vid {
+      width: 320px;
+      height: 240px;
+      background: #000;
+    }
+
+    .controls {
+      margin-top: 5px;
+    }
+
+    button {
+      margin: 2px;
+      padding: 5px 10px;
+      background: #333;
+      color: white;
+      border: 1px solid #666;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container" id="video-container">
+
+    <div class="video-block">
+      <canvas class="vid" id="video-canvas" crossorigin="anonymous"></canvas>
+      <div class="controls">
+        <button onclick="moveLeft(this)"><</button>
+        <button onclick="moveRight(this)">></button>
+      </div>
+    </div>
+
+    <div class="video-block">
+      <canvas class="vid" id="video-canvas2" crossorigin="anonymous"></canvas>
+      <div class="controls">
+        <button onclick="moveLeft(this)"><</button>
+        <button onclick="moveRight(this)">><button>
+      </div>
+    </div>
+
+    <div class="video-block">
+      <canvas class="vid" id="video-canvas3" crossorigin="anonymous"></canvas>
+      <div class="controls">
+        <button onclick="moveLeft(this)"><<button>
+        <button onclick="moveRight(this)">></button>
+      </div>
+    </div>
+	<button onclick="downloadAllCanvases()">Download All Frames</button>
+  </div>
+
+  <script type="text/javascript" src="jsmpeg.min.js"></script>
+  <script type="text/javascript">
+    var canvas = document.getElementById('video-canvas');
+    var url = 'ws://' + document.location.hostname + ':8082/';
+    var player = new JSMpeg.Player(url, { canvas: canvas });
+
+    var canvas2 = document.getElementById('video-canvas2');
+    var url2 = 'ws://' + document.location.hostname + ':8084/';
+    var player2 = new JSMpeg.Player(url2, { canvas: canvas2 });
+
+    var canvas3 = document.getElementById('video-canvas3');
+    var url3 = 'ws://' + document.location.hostname + ':8086/';
+    var player3 = new JSMpeg.Player(url3, { canvas: canvas3 });
+
+    function moveLeft(button) {
+      const block = button.closest('.video-block');
+      const prev = block.previousElementSibling;
+      if (prev) {
+        block.parentNode.insertBefore(block, prev);
+      }
+    }
+
+    function moveRight(button) {
+      const block = button.closest('.video-block');
+      const next = block.nextElementSibling;
+      if (next) {
+        block.parentNode.insertBefore(next, block);
+      }
+    }
+
+    function downloadCanvas(canvas, filename) {
+    const image = canvas.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = image;
+    a.download = filename;
+    a.click();
+}
+
+function downloadAllCanvases() {
+    const canvas1 = document.getElementById("video-canvas");
+    const canvas2 = document.getElementById("video-canvas2");
+    const canvas3 = document.getElementById("video-canvas3");
+
+    if (canvas1) downloadCanvas(canvas1, "frame1.png");
+    if (canvas2) downloadCanvas(canvas2, "frame2.png");
+    if (canvas3) downloadCanvas(canvas3, "frame3.png");
+}
+  </script>
+
+</body>
+</html>
