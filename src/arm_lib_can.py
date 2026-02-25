@@ -348,21 +348,21 @@ def velocity_control_loco(x,y):
 #                             ),
 #                             URDFLink(
 #                                 name="shoulder",
-#                                 origin_translation=np.array([0, 0.48065, 0]),  # 0.3 meters up
+#                                 origin_translation=np.array([0, 0.48065, 0]),  # 0.48065 meters up
 #                                 origin_orientation=np.array([0, 0, 0]),
 #                                 rotation=np.array([0, 0, 1]),  # Rotates around z-axis (xy plane)
 #                                 bounds=(-np.pi, np.pi)
 #                             ),
 #                             URDFLink(
 #                                 name="elbow",
-#                                 origin_translation=np.array([0, 0.42053, 0]),  # 0.25 meters up
+#                                 origin_translation=np.array([0, 0.42053, 0]),  # 0.42053 meters up
 #                                 origin_orientation=np.array([0, 0, 0]),
 #                                 rotation=np.array([0, 0, 1]),  # Rotates around z-axis (xy plane)
 #                                 bounds=(-np.pi, np.pi)
 #                             ),
 #                             URDFLink(
 #                                 name="wrist",
-#                                 origin_translation=np.array([0, 0.40736, 0]),  # 0.32 meters up
+#                                 origin_translation=np.array([0, 0.40736, 0]),  # 0.40736 meters up
 #                                 origin_orientation=np.array([0, 0, 0]),
 #                                 rotation=np.array([0, 0, 1]),  # Rotates around z-axis (xy plane)
 #                                 bounds=(-np.pi, np.pi)
