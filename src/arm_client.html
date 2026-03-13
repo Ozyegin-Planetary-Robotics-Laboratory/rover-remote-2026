@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arm Visualizer + IK</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+         :root {
+            --bg: #0a0a0f;
+            --panel: #12121a;
+            --border: #1e1e2e;
+            --text: #c8c8d4;
+            --dim: #6a6a7a;
+            --accent: #4ecdc4;
+            --accent2: #ff6b6b;
+            --accent3: #ffe66d;
+            --j1: #4ecdc4;
+            --j2: #ff6b6b;
+            --j3: #ffe66d;
+            --s1: #3da8a0;
+            --s2: #d45a5a;
+            --s3: #d4bf5a;
+        }
+        
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        .panel {
+            width: 310px;
+            min-width: 310px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 12px;
+            gap: 8px;
+            font-size: 11px;
+        }
+        
+        .panel h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 2px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 10px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            border: 2px solid var(--accent);
+            background: transparent;
+            color: var(--accent);
+            cursor: pointer;
+            transition: all 0.15s;
+            letter-spacing: 1px;
+        }
+        
+        .btn:hover {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        
+        .btn.active {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        
+        .btn.danger {
+            border-color: var(--accent2);
+            color: var(--accent2);
+        }
+        
+        .btn.danger:hover,
+        .btn.danger.active {
+            background: var(--accent2);
+            color: var(--bg);
+        }
+        
+        .btn.warn {
+            border-color: var(--accent3);
+            color: var(--accent3);
+        }
+        
+        .btn.warn:hover,
+        .btn.warn.active {
+            background: var(--accent3);
+            color: var(--bg);
+        }
+        
+        .status {
+            padding: 6px 8px;
+            font-size: 10px;
+            border: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--dim);
+            line-height: 1.5;
+        }
+        
+        .status .live {
+            color: var(--accent);
+        }
+        
+        .status .frozen {
+            color: var(--accent3);
+        }
+        
+        .status .err {
+            color: var(--accent2);
+        }
+        
+        .section-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--dim);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+        
+        .motor-card {
+            border: 1px solid var(--border);
+            padding: 6px 8px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        
+        .mc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        
+        .mc-name {
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        
+        .mc-name.c1 {
+            color: var(--j1);
+        }
+        
+        .mc-name.c2 {
+            color: var(--j2);
+        }
+        
+        .mc-name.c3 {
+            color: var(--j3);
+        }
+        
+        .flip-btn {
+            padding: 2px 6px;
+            font-family: inherit;
+            font-size: 9px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--dim);
+            cursor: pointer;
+        }
+        
+        .flip-btn:hover {
+            border-color: var(--text);
+            color: var(--text);
+        }
+        
+        .mc-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 1px 0;
+        }
+        
+        .mc-row .label {
+            color: var(--dim);
+        }
+        
+        .mc-row .val {
+            font-weight: 600;
+        }
+        
+        .mc-row .val.big {
+            color: #fff;
+            font-size: 12px;
+        }
+        
+        .gp-box {
+            border: 1px solid var(--border);
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+        
+        .gp-viz {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 4px;
+        }
+        
+        .stick-viz {
+            width: 60px;
+            height: 60px;
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            position: relative;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        .stick-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .gp-info {
+            font-size: 10px;
+            color: var(--dim);
+            line-height: 1.5;
+        }
+        
+        .toast {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            background: var(--accent);
+            color: var(--bg);
+            padding: 8px 14px;
+            font-size: 11px;
+            font-weight: 700;
+            z-index: 100;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: all 0.2s;
+            pointer-events: none;
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .canvas-wrap {
+            flex: 1;
+            position: relative;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        .overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 10px;
+            color: var(--dim);
+            line-height: 1.5;
+        }
+        
+        .tag {
+            display: inline-block;
+            padding: 1px 5px;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-right: 4px;
+        }
+        
+        .tag.live {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        
+        .tag.frozen {
+            background: var(--accent3);
+            color: var(--bg);
+        }
+        
+        .ee-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 11px;
+            color: var(--accent);
+            font-weight: 600;
+        }
+        
+        .ik-info {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 11px;
+            color: var(--accent2);
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="panel">
+        <h1>ARM VIS+IK</h1>
+        <button class="btn" id="calBtn">▶ CALIBRATE</button>
+        <button class="btn warn" id="ikBtn">🎮 ENABLE IK</button>
+        <div class="status" id="statusBar">Connecting...</div>
+
+        <div class="section-title">Gamepad</div>
+        <div class="gp-box" id="gpBox">
+            <div id="gpNone">No gamepad. Press a button to connect.</div>
+            <div class="gp-viz" style="display:none" id="gpViz">
+                <div class="stick-viz">
+                    <div class="stick-dot" id="stickDot"></div>
+                </div>
+                <div class="gp-info" id="gpInfo">X: 0.00<br>Y: 0.00</div>
+            </div>
+        </div>
+
+        <div class="section-title">IK Target</div>
+        <div class="status" id="ikStatus">IK disabled</div>
+
+        <div class="section-title">Motors</div>
+        <div id="motorCards"></div>
+    </div>
+
+    <div class="canvas-wrap">
+        <canvas id="cv"></canvas>
+        <div class="overlay" id="overlay">
+            <span class="tag frozen" id="stateTag">FROZEN</span>
+            <span id="angleText">Sh:0° El:0° Wr:0°</span>
+        </div>
+        <div class="ee-info" id="eeInfo">EE: (0.000, 1.309)</div>
+        <div class="ik-info" id="ikInfo"></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CONFIG
+        // ═══════════════════════════════════════════════════════════════════════════
+        const SEGS = [0.48065, 0.42053, 0.40736];
+        const TOTAL_REACH = SEGS.reduce((a, b) => a + b, 0);
+        const JOINT_COLORS = {
+            "16": "#4ecdc4",
+            "13": "#ff6b6b",
+            "14": "#ffe66d"
+        };
+        const SEG_COLORS = ["#3da8a0", "#d45a5a", "#d4bf5a"];
+        const DOF_ORDER = [{
+            canId: "16",
+            name: "Shoulder",
+            dof: 2,
+            cc: "c1"
+        }, {
+            canId: "13",
+            name: "Elbow",
+            dof: 3,
+            cc: "c2"
+        }, {
+            canId: "14",
+            name: "Wrist",
+            dof: 4,
+            cc: "c3"
+        }, ];
+
+        // Joint limits (degrees). Positive = forward (left on screen).
+        const LIMITS = {
+            2: [-15, 90],
+            3: [-15, 135],
+            4: [-15, 110]
+        };
+
+        // Wrist is locked at this angle when IK is active
+        const WRIST_LOCK_DEG = 90;
+
+        const EE_SPEED = 0.05; // m/s at full stick (5 cm/s)
+        const DEADZONE = 0.12;
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // STATE
+        // ═══════════════════════════════════════════════════════════════════════════
+        let armState = null;
+        let ws = null,
+            wsOK = false;
+        let ikEnabled = false;
+        let gamepadIndex = null;
+        let ikTargetX = 0,
+            ikTargetY = TOTAL_REACH;
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // DOM
+        // ═══════════════════════════════════════════════════════════════════════════
+        const cv = document.getElementById('cv');
+        const ctx = cv.getContext('2d');
+        const calBtn = document.getElementById('calBtn');
+        const ikBtn = document.getElementById('ikBtn');
+        const statusBar = document.getElementById('statusBar');
+        const stateTag = document.getElementById('stateTag');
+        const angleText = document.getElementById('angleText');
+        const eeInfo = document.getElementById('eeInfo');
+        const ikInfo = document.getElementById('ikInfo');
+        const toastEl = document.getElementById('toast');
+        const motorCardsEl = document.getElementById('motorCards');
+        const gpViz = document.getElementById('gpViz');
+        const gpNone = document.getElementById('gpNone');
+        const stickDot = document.getElementById('stickDot');
+        const gpInfoEl = document.getElementById('gpInfo');
+        const ikStatus = document.getElementById('ikStatus');
+
+        // Build motor cards
+        DOF_ORDER.forEach(d => {
+            const c = document.createElement('div');
+            c.className = 'motor-card';
+            c.id = `card-${d.canId}`;
+            c.innerHTML = `
+    <div class="mc-header">
+      <span class="mc-name ${d.cc}">DOF${d.dof} ${d.name} [${d.canId}]</span>
+      <button class="flip-btn" data-canid="${d.canId}">⟲FLIP</button>
+    </div>
+    <div class="mc-row"><span class="label">Raw</span><span class="val" id="raw-${d.canId}">—</span></div>
+    <div class="mc-row"><span class="label">Joint°</span><span class="val big" id="joint-${d.canId}">0.0°</span></div>
+    <div class="mc-row"><span class="label">Target°</span><span class="val" id="tgt-${d.canId}" style="color:var(--accent2)">—</span></div>
+    <div class="mc-row"><span class="label">Temp</span><span class="val" id="temp-${d.canId}">—</span></div>
+  `;
+            motorCardsEl.appendChild(c);
+        });
+
+        document.querySelectorAll('.flip-btn').forEach(b => {
+            b.addEventListener('click', () => wsSend({
+                cmd: "flip_direction",
+                can_id: parseInt(b.dataset.canid)
+            }));
+        });
+        calBtn.addEventListener('click', () => {
+            wsSend({
+                cmd: "calibrate"
+            });
+            ikTargetX = 0;
+            ikTargetY = TOTAL_REACH;
+            ikEnabled = false;
+            ikBtn.textContent = '🎮 ENABLE IK';
+            ikBtn.classList.remove('active');
+        });
+        ikBtn.addEventListener('click', () => {
+            if (!armState || !armState.calibrated) {
+                showToast('Calibrate first!');
+                return;
+            }
+            ikEnabled = !ikEnabled;
+            ikBtn.textContent = ikEnabled ? '🛑 DISABLE IK' : '🎮 ENABLE IK';
+            ikBtn.classList.toggle('active', ikEnabled);
+
+            if (ikEnabled) {
+                // Initialize IK target to current EE position
+                if (armState && armState.points) {
+                    const ee = armState.points[armState.points.length - 1];
+                    ikTargetX = ee[0];
+                    ikTargetY = ee[1];
+                }
+                // On enable, first move wrist to 90° then compute EE of new config
+                // We'll send the initial wrist=90° immediately
+                const curAngles = armState ? armState.angles : {};
+                const initSh = parseFloat(curAngles["2"]) || 0;
+                const initEl = parseFloat(curAngles["3"]) || 0;
+                // Compute where EE will be after wrist goes to 90°
+                const pts = fk({
+                    2: initSh,
+                    3: initEl,
+                    4: WRIST_LOCK_DEG
+                });
+                const newEE = pts[pts.length - 1];
+                ikTargetX = newEE[0];
+                ikTargetY = newEE[1];
+                // Send initial state
+                wsSend({
+                    cmd: "ik_target",
+                    angles: {
+                        "2": initSh,
+                        "3": initEl,
+                        "4": WRIST_LOCK_DEG
+                    },
+                    target_xy: [ikTargetX, ikTargetY],
+                });
+            }
+            wsSend({
+                cmd: "ik_enable",
+                enabled: ikEnabled
+            });
+        });
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // TOAST & WS
+        // ═══════════════════════════════════════════════════════════════════════════
+        let toastT = null;
+
+        function showToast(m) {
+            toastEl.textContent = m;
+            toastEl.classList.add('show');
+            clearTimeout(toastT);
+            toastT = setTimeout(() => toastEl.classList.remove('show'), 2500);
+        }
+
+        function wsSend(obj) {
+            if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+        }
+
+        function connectWS() {
+            const p = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${p}//${location.host}/ws`);
+            ws.onopen = () => {
+                wsOK = true;
+            };
+            ws.onmessage = e => {
+                const m = JSON.parse(e.data);
+                if (m.type === 'state') armState = m;
+                else if (m.type === 'info') showToast(m.message);
+            };
+            ws.onclose = () => {
+                wsOK = false;
+                setTimeout(connectWS, 1000);
+            };
+            ws.onerror = () => ws.close();
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FORWARD KINEMATICS
+        // ═══════════════════════════════════════════════════════════════════════════
+        // angles: {2: deg, 3: deg, 4: deg}
+        // Positive angle = tilt forward = left on screen
+        // Returns array of [x, y] points from base (0,0)
+        function fk(angles) {
+            const pts = [
+                [0, 0]
+            ];
+            let cum = 0,
+                x = 0,
+                y = 0;
+            for (let i = 0; i < SEGS.length; i++) {
+                const dof = i + 2;
+                cum += (angles[dof] || 0) * Math.PI / 180;
+                x += SEGS[i] * Math.sin(cum);
+                y += SEGS[i] * Math.cos(cum);
+                pts.push([x, y]);
+            }
+            return pts;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 2D INVERSE KINEMATICS
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 3-DOF arm with wrist locked at WRIST_LOCK_DEG.
+        //
+        // Strategy:
+        //   - The wrist segment (SEGS[2]) is at a fixed angle relative to the elbow.
+        //   - We need to find the "wrist point" (joint between seg2 and seg3),
+        //     then do 2-link IK (shoulder+elbow) to reach that wrist point.
+        //   - Given a desired EE (end-effector) position, we back-compute the wrist point
+        //     by subtracting the wrist segment vector from the EE position.
+        //   - But the wrist segment direction depends on shoulder+elbow angles (cumulative),
+        //     so we iterate: guess shoulder+elbow → compute wrist direction → refine.
+        //
+        // Simpler approach: Use the fact that wrist angle is relative to elbow.
+        //   cumulative_angle_at_wrist = shoulder_angle + elbow_angle + wrist_angle
+        //   The wrist segment goes in direction (sin(cum), cos(cum)) from vertical.
+        //   Since wrist_angle = 90° (fixed), we can parameterize:
+        //     Let phi = shoulder + elbow (cumulative angle at elbow joint)
+        //     wrist direction = phi + 90°
+        //     EE = wrist_point + SEGS[2] * (sin(phi+90°), cos(phi+90°))
+        //     wrist_point = EE - SEGS[2] * (sin(phi+90°), cos(phi+90°))
+        //
+        // We iterate: for a given target EE, try solving 2-link IK for the wrist point,
+        // then check if it's consistent. In practice, a single-pass approach works:
+        //   1. Guess phi from the angle to the target
+        //   2. Compute wrist_point
+        //   3. Solve 2-link IK for wrist_point
+        //   4. Get actual phi, recompute wrist_point, solve again (converges in 2-3 iters)
+
+        function solveIK(tx, ty) {
+            const L1 = SEGS[0]; // shoulder
+            const L2 = SEGS[1]; // elbow
+            const L3 = SEGS[2]; // wrist
+            const wristRad = WRIST_LOCK_DEG * Math.PI / 180;
+
+            // Iterative: start with initial guess of phi (cumulative angle at elbow)
+            // Initial guess: angle from base to target
+            let phi = Math.atan2(tx, ty); // angle from vertical to target point
+
+            let bestSh = 0,
+                bestEl = 0;
+            let converged = false;
+
+            for (let iter = 0; iter < 8; iter++) {
+                // Wrist point = EE - wrist_segment_vector
+                // wrist segment direction angle from vertical = phi + wristRad
+                const wristDirAngle = phi + wristRad;
+                const wpx = tx - L3 * Math.sin(wristDirAngle);
+                const wpy = ty - L3 * Math.cos(wristDirAngle);
+
+                // 2-link IK for (L1, L2) reaching (wpx, wpy)
+                const d = Math.sqrt(wpx * wpx + wpy * wpy);
+                const maxR = L1 + L2 - 0.001;
+                const minR = Math.abs(L1 - L2) + 0.001;
+
+                let wx = wpx,
+                    wy = wpy;
+                if (d > maxR) {
+                    wx = wpx / d * maxR;
+                    wy = wpy / d * maxR;
+                } else if (d < minR) {
+                    wx = wpx / d * minR;
+                    wy = wpy / d * minR;
+                }
+                const dd = Math.sqrt(wx * wx + wy * wy);
+
+                // Angle from vertical to wrist point
+                const angleToWP = Math.atan2(wx, wy);
+
+                // Law of cosines for elbow
+                let cosE = (L1 * L1 + L2 * L2 - dd * dd) / (2 * L1 * L2);
+                cosE = Math.max(-1, Math.min(1, cosE));
+                const elbowRad = Math.PI - Math.acos(cosE);
+
+                // Shoulder offset
+                let cosA = (L1 * L1 + dd * dd - L2 * L2) / (2 * L1 * dd);
+                cosA = Math.max(-1, Math.min(1, cosA));
+                const alpha = Math.acos(cosA);
+
+                // Shoulder: elbow-down solution (arm reaches forward/left)
+                const shoulderRad = angleToWP + alpha;
+
+                // Update phi for next iteration
+                const newPhi = shoulderRad + elbowRad;
+                if (Math.abs(newPhi - phi) < 0.001) {
+                    converged = true;
+                }
+                phi = newPhi;
+
+                bestSh = shoulderRad * 180 / Math.PI;
+                bestEl = elbowRad * 180 / Math.PI;
+            }
+
+            // Clamp to joint limits
+            bestSh = Math.max(LIMITS[2][0], Math.min(LIMITS[2][1], bestSh));
+            bestEl = Math.max(LIMITS[3][0], Math.min(LIMITS[3][1], bestEl));
+            const wristDeg = WRIST_LOCK_DEG; // always locked
+
+            // Compute actual EE from clamped angles for display
+            const pts = fk({
+                2: bestSh,
+                3: bestEl,
+                4: wristDeg
+            });
+            const actualEE = pts[pts.length - 1];
+
+            return {
+                2: bestSh,
+                3: bestEl,
+                4: wristDeg,
+                converged: converged,
+                ee: actualEE,
+            };
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GAMEPAD
+        // ═══════════════════════════════════════════════════════════════════════════
+        window.addEventListener('gamepadconnected', e => {
+            gamepadIndex = e.gamepad.index;
+            gpNone.style.display = 'none';
+            gpViz.style.display = 'flex';
+            showToast(`Gamepad: ${e.gamepad.id.slice(0,30)}`);
+        });
+        window.addEventListener('gamepaddisconnected', e => {
+            if (e.gamepad.index === gamepadIndex) gamepadIndex = null;
+            gpViz.style.display = 'none';
+            gpNone.style.display = 'block';
+        });
+
+        let lastIKSend = 0;
+
+        function pollGamepad() {
+            if (gamepadIndex === null || !ikEnabled) return;
+            const gp = navigator.getGamepads()[gamepadIndex];
+            if (!gp) return;
+
+            let lx = gp.axes[0] || 0;
+            let ly = gp.axes[1] || 0;
+            if (Math.abs(lx) < DEADZONE) lx = 0;
+            if (Math.abs(ly) < DEADZONE) ly = 0;
+
+            // Stick visualization
+            stickDot.style.left = `${50 + lx * 45}%`;
+            stickDot.style.top = `${50 + ly * 45}%`;
+
+            // Move EE target
+            // Positive angle = forward = LEFT on screen = NEGATIVE X in arm coords
+            // Joystick left (lx < 0) = move arm forward = decrease X
+            // Joystick up (ly < 0) = move arm up = increase Y
+            const dt = 0.05;
+            ikTargetX += lx * EE_SPEED * dt; // left stick left = -X (forward)
+            ikTargetY += (-ly) * EE_SPEED * dt; // left stick up = +Y
+
+            // Clamp to workspace (don't go underground, don't exceed reach)
+            if (ikTargetY < -0.05) ikTargetY = -0.05;
+            const dist = Math.sqrt(ikTargetX * ikTargetX + ikTargetY * ikTargetY);
+            const maxR = TOTAL_REACH - 0.02;
+            if (dist > maxR) {
+                ikTargetX = ikTargetX / dist * maxR;
+                ikTargetY = ikTargetY / dist * maxR;
+            }
+
+            const mag = Math.sqrt(lx * lx + ly * ly);
+            gpInfoEl.innerHTML = `LX: ${lx.toFixed(2)}<br>LY: ${ly.toFixed(2)}<br>Mag: ${mag.toFixed(2)}`;
+
+            // Solve IK
+            const ik = solveIK(ikTargetX, ikTargetY);
+
+            // Throttle sends to ~20Hz
+            const now = Date.now();
+            if (now - lastIKSend > 50) {
+                wsSend({
+                    cmd: "ik_target",
+                    angles: {
+                        "2": +ik[2].toFixed(2),
+                        "3": +ik[3].toFixed(2),
+                        "4": +ik[4].toFixed(2)
+                    },
+                    target_xy: [+ikTargetX.toFixed(4), +ikTargetY.toFixed(4)],
+                });
+                lastIKSend = now;
+            }
+
+            // IK status panel
+            ikStatus.innerHTML =
+                `Target: (${ikTargetX.toFixed(3)}, ${ikTargetY.toFixed(3)})<br>` +
+                `Sh:${ik[2].toFixed(1)}° El:${ik[3].toFixed(1)}° Wr:${ik[4].toFixed(1)}°<br>` +
+                `<span style="color:${ik.converged?'var(--accent)':'var(--accent2)'}">${ik.converged?'Converged':'Solving...'}</span>`;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // UI UPDATE
+        // ═══════════════════════════════════════════════════════════════════════════
+        function updateUI() {
+            if (!armState) return;
+            const s = armState;
+
+            if (s.calibrated) {
+                stateTag.className = 'tag live';
+                stateTag.textContent = 'LIVE';
+                calBtn.textContent = '⟳ RE-CALIBRATE';
+                calBtn.classList.add('active');
+            } else {
+                stateTag.className = 'tag frozen';
+                stateTag.textContent = 'FROZEN';
+                calBtn.textContent = '▶ CALIBRATE';
+                calBtn.classList.remove('active');
+            }
+
+            const a = s.angles || {};
+            angleText.textContent = `Sh:${(a["2"]||0).toFixed(1)}° El:${(a["3"]||0).toFixed(1)}° Wr:${(a["4"]||0).toFixed(1)}°`;
+
+            const pts = s.points || [];
+            if (pts.length > 0) {
+                const ee = pts[pts.length - 1];
+                eeInfo.textContent = `EE: (${ee[0].toFixed(3)}, ${ee[1].toFixed(3)})`;
+            }
+
+            if (s.ik_enabled && s.ik_target_xy) {
+                ikInfo.textContent = `IK→ (${s.ik_target_xy[0].toFixed(3)}, ${s.ik_target_xy[1].toFixed(3)})`;
+            } else {
+                ikInfo.textContent = '';
+            }
+
+            const mt = s.motors || {};
+            const ta = s.ik_target_angles || {};
+            DOF_ORDER.forEach(d => {
+                const m = mt[d.canId];
+                if (!m) return;
+                document.getElementById(`raw-${d.canId}`).textContent = m.received ? `${m.raw_deg.toFixed(1)}°` : '—';
+                document.getElementById(`joint-${d.canId}`).textContent = `${m.joint_deg.toFixed(2)}°`;
+                document.getElementById(`tgt-${d.canId}`).textContent = s.ik_enabled ? `${(ta[String(d.dof)]||0).toFixed(2)}°` : '—';
+                document.getElementById(`temp-${d.canId}`).textContent = m.received ? `${m.temp}°C` : '—';
+            });
+
+            if (!wsOK) {
+                statusBar.innerHTML = '<span class="err">DISCONNECTED</span>';
+                return;
+            }
+            const stC = s.calibrated ? 'live' : 'frozen';
+            const stT = s.calibrated ? 'LIVE' : 'FROZEN';
+            let extra = s.ik_enabled ? ' | <span style="color:var(--accent2)">IK ACTIVE</span>' : '';
+            statusBar.innerHTML = `<span class="${stC}">${stT}</span> msgs:${s.msg_count}${extra}`;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CANVAS
+        // ═══════════════════════════════════════════════════════════════════════════
+        function resize() {
+            cv.width = cv.parentElement.clientWidth;
+            cv.height = cv.parentElement.clientHeight;
+        }
+
+        function draw() {
+            const W = cv.width,
+                H = cv.height;
+            ctx.clearRect(0, 0, W, H);
+
+            const margin = 50;
+            const scale = (Math.min(W, H) - margin * 2) / (TOTAL_REACH * 2.2);
+            // Base position: center-right since arm reaches left
+            const bx = W * 0.6,
+                by = H * 0.72;
+
+            function toC(ax, ay) {
+                return [bx + ax * scale, by - ay * scale];
+            }
+
+            // Grid
+            ctx.strokeStyle = '#1a1a2a';
+            ctx.lineWidth = 1;
+            const gs = 0.2,
+                gr = TOTAL_REACH * 1.3;
+            for (let g = -gr; g <= gr; g += gs) {
+                let [x1, y1] = toC(g, -0.1), [x2, y2] = toC(g, gr + 0.3);
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                [x1, y1] = toC(-gr, g);
+                [x2, y2] = toC(gr, g);
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+
+            // Ground line
+            ctx.strokeStyle = '#2a2a3a';
+            ctx.lineWidth = 2;
+            let [g1x, g1y] = toC(-gr, 0), [g2x, g2y] = toC(gr, 0);
+            ctx.beginPath();
+            ctx.moveTo(g1x, g1y);
+            ctx.lineTo(g2x, g2y);
+            ctx.stroke();
+
+            // Vertical reference
+            ctx.save();
+            ctx.strokeStyle = '#2a2a3a';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            let [v1x, v1y] = toC(0, 0), [v2x, v2y] = toC(0, TOTAL_REACH * 1.1);
+            ctx.beginPath();
+            ctx.moveTo(v1x, v1y);
+            ctx.lineTo(v2x, v2y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+
+            // "FORWARD →" label (pointing left)
+            ctx.save();
+            ctx.font = '9px monospace';
+            ctx.fillStyle = '#2a2a3a';
+            const [lx, ly] = toC(-TOTAL_REACH * 0.5, -0.12);
+            ctx.fillText('← FORWARD (rover front)', lx, ly);
+            ctx.restore();
+
+            // ── Ghost arm (IK target) ──
+            if (armState && armState.ik_enabled && armState.ik_target_points) {
+                const gpts = armState.ik_target_points;
+                for (let i = 0; i < gpts.length - 1; i++) {
+                    const [x1, y1] = toC(gpts[i][0], gpts[i][1]);
+                    const [x2, y2] = toC(gpts[i + 1][0], gpts[i + 1][1]);
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(255,100,100,0.35)';
+                    ctx.lineWidth = 6;
+                    ctx.lineCap = 'round';
+                    ctx.setLineDash([6, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.restore();
+                }
+                for (let i = 0; i < gpts.length; i++) {
+                    const [cx, cy] = toC(gpts[i][0], gpts[i][1]);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255,100,100,0.3)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(255,100,100,0.5)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            // ── IK target crosshair ──
+            if (ikEnabled) {
+                const [tx, ty] = toC(ikTargetX, ikTargetY);
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255,100,100,0.6)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(tx - 12, ty);
+                ctx.lineTo(tx + 12, ty);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(tx, ty - 12);
+                ctx.lineTo(tx, ty + 12);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(tx, ty, 6, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // ── Actual arm ──
+            let points;
+            if (armState && armState.points) points = armState.points;
+            else {
+                points = [
+                    [0, 0]
+                ];
+                let yy = 0;
+                for (const s of SEGS) {
+                    yy += s;
+                    points.push([0, yy]);
+                }
+            }
+
+            const canIds = ["16", "13", "14"];
+            // Segments
+            for (let i = 0; i < points.length - 1; i++) {
+                const [x1, y1] = toC(points[i][0], points[i][1]);
+                const [x2, y2] = toC(points[i + 1][0], points[i + 1][1]);
+                ctx.save();
+                ctx.strokeStyle = SEG_COLORS[i] || '#888';
+                ctx.lineWidth = 8;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                ctx.lineWidth = 14;
+                ctx.globalAlpha = 0.12;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                ctx.restore();
+            }
+            // Joints
+            for (let i = 0; i < points.length; i++) {
+                const [cx, cy] = toC(points[i][0], points[i][1]);
+                const color = i === 0 ? '#888' : (JOINT_COLORS[canIds[i - 1]] || '#888');
+                const r = i === 0 ? 10 : 8;
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.15;
+                ctx.fill();
+                ctx.restore();
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fillStyle = i === 0 ? '#333' : color;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.restore();
+                if (i > 0 && armState && armState.angles) {
+                    const ang = armState.angles[String(i + 1)] || 0;
+                    ctx.save();
+                    ctx.font = '600 10px monospace';
+                    ctx.fillStyle = color;
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`${ang.toFixed(1)}°`, cx + r + 5, cy + 4);
+                    ctx.restore();
+                }
+            }
+
+            // Base platform
+            ctx.save();
+            const [bxx, byy] = toC(0, 0);
+            ctx.fillStyle = '#1a1a2a';
+            ctx.strokeStyle = '#3a3a4a';
+            ctx.lineWidth = 2;
+            ctx.fillRect(bxx - 24, byy, 48, 12);
+            ctx.strokeRect(bxx - 24, byy, 48, 12);
+            ctx.restore();
+
+            // EE dot
+            if (points.length > 1) {
+                const ee = points[points.length - 1];
+                const [ex, ey] = toC(ee[0], ee[1]);
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(ex, ey, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ff1744';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // Scale bar
+            ctx.save();
+            const [s1x, s1y] = toC(TOTAL_REACH * 0.5, -0.05);
+            const [s2x, s2y] = toC(TOTAL_REACH * 0.5 + 0.2, -0.05);
+            ctx.strokeStyle = '#3a3a4a';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(s1x, s1y);
+            ctx.lineTo(s2x, s2y);
+            ctx.stroke();
+            ctx.font = '9px monospace';
+            ctx.fillStyle = '#4a4a5a';
+            ctx.textAlign = 'center';
+            ctx.fillText('20cm', (s1x + s2x) / 2, s1y + 12);
+            ctx.restore();
+
+            // Reachability circle
+            if (ikEnabled) {
+                const [ccx, ccy] = toC(0, 0);
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(ccx, ccy, TOTAL_REACH * scale, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(255,100,100,0.08)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // MAIN LOOP
+        // ═══════════════════════════════════════════════════════════════════════════
+        function loop() {
+            pollGamepad();
+            updateUI();
+            setTimeout(loop, 50); // 20Hz for gamepad polling
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+        connectWS();
+        draw();
+        loop();
+    </script>
+</body>
+
+</html>
