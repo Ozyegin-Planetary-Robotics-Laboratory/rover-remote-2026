@@ -22,6 +22,7 @@ import math
 import time
 import os
 from pathlib import Path
+from arm_inverse_kinematics import solve_target_for_repo, solution_rad_to_deg_dict
 
 # ─── Motor / Arm Configuration ──────────────────────────────────────────────
 
@@ -409,3 +410,23 @@ if __name__ == "__main__":
     parser.add_argument('--mock', action='store_true')
     args = parser.parse_args()
     asyncio.run(main(args))
+###
+def solve_and_store_ik_target(self, x, y, z, phi_deg=0.0, elbow_up=False):
+    # hedef noktayı 4 dof açılarına ceviriyoruz
+    sol = solve_target_for_repo(x, y, z, phi_deg=phi_deg, elbow_up=elbow_up)
+
+    # radyandan dereceye ceviriyoruz
+    sol_deg = solution_rad_to_deg_dict(sol)
+
+    # state icine yazıyoruz
+    self.ik_target_angles = {
+        1: sol_deg[1],
+        2: sol_deg[2],
+        3: sol_deg[3],
+        4: sol_deg[4],
+    }
+
+    # hedef noktayı da saklayalım
+    self.ik_target_point = (x, y, z)
+
+    return self.ik_target_angles
